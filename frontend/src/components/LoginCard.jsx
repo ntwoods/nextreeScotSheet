@@ -7,15 +7,14 @@ export default function LoginCard({ onSuccess, onError }) {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">
           NEXTREE SCOT
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
-          SCOT Portal
-        </h1>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">SCOT Portal</h1>
         <p className="mt-3 text-sm text-slate-500">
           Sign in with your Google account to track today&apos;s follow-ups.
         </p>
       </div>
+
       <div className="rounded-xl border border-slate-200 px-6 py-4">
-        <GoogleLogin onSuccess={onSuccess} onError={onError} useOneTap />
+        <GoogleLogin onSuccess={onSuccess} onError={onError} />
       </div>
     </div>
   )
