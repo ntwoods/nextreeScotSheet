@@ -2,6 +2,7 @@ const API_BASE = import.meta.env.VITE_API_BASE
 
 export async function apiPost(action, payload = {}, idToken) {
   if (!API_BASE) {
+    console.error('VITE_API_BASE environment variable is not set. Please check your .env file.')
     throw new Error('VITE_API_BASE is not set')
   }
 
@@ -13,10 +14,22 @@ export async function apiPost(action, payload = {}, idToken) {
     body: JSON.stringify({ action, idToken, ...payload }),
   })
 
-  const data = await response.json().catch(() => null)
+  const text = await response.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
 
   if (!response.ok || !data || data.ok === false) {
-    const message = data?.error || 'Request failed'
+    const message =
+      data?.error ||
+      (text && text.trim().startsWith('<')
+        ? 'Apps Script returned HTML. Check that the Web App URL is correct and deployed for anyone.'
+        : 'Request failed')
     const error = new Error(message)
     error.code = data?.code || response.status
     throw error

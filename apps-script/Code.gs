@@ -2,8 +2,7 @@ const SPREADSHEET_ID = '1ECi7Tx3QWPjq8nWL1O_90UfUwFW7VvnZssx_KeOh09Y'
 const SCOT_SHEET_NAME = 'SCOT'
 const LOGS_SHEET_NAME = 'Logs'
 const TIMEZONE = 'Asia/Kolkata'
-const CLIENT_ID =
-  '360849757137-agopfs0m8rgmcj541ucpg22btep5olt3.apps.googleusercontent.com'
+const CLIENT_ID = '360849757137-agopfs0m8rgmcj541ucpg22btep5olt3.apps.googleusercontent.com'
 const ALLOW_ANY_DOMAIN = false
 
 function doGet() {
@@ -491,9 +490,42 @@ function makeDateInTimeZone(year, month, day, hours, minutes, seconds) {
 }
 
 function coerceDate(value) {
-  if (!value) return null
+  if (value === null || value === undefined || value === '') return null
   if (value instanceof Date) return value
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed
+
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    const millis = Math.round((value - 25569) * 86400 * 1000)
+    if (!Number.isNaN(millis)) return new Date(millis)
+  }
+
+  const raw = String(value).trim()
+  if (!raw) return null
+
+  const parsed = new Date(raw)
+  if (!Number.isNaN(parsed.getTime())) return parsed
+
+  const match = raw.match(
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+  )
+  if (!match) return null
+
+  const day = Number(match[1])
+  const month = Number(match[2]) - 1
+  const year = Number(match[3])
+  const hours = match[4] ? Number(match[4]) : 0
+  const minutes = match[5] ? Number(match[5]) : 0
+  const seconds = match[6] ? Number(match[6]) : 0
+
+  if (
+    Number.isNaN(day) ||
+    Number.isNaN(month) ||
+    Number.isNaN(year) ||
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    Number.isNaN(seconds)
+  ) {
+    return null
+  }
+
+  return makeDateInTimeZone(year, month, day, hours, minutes, seconds)
 }
