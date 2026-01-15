@@ -3,23 +3,25 @@ const API_BASE = import.meta.env.VITE_API_BASE
 export async function apiPost(action, payload = {}, idToken) {
   if (!API_BASE) throw new Error("VITE_API_BASE is not set")
 
-  const response = await fetch(API_BASE, {
+  const res = await fetch(API_BASE, {
     method: "POST",
-    // ✅ IMPORTANT: No headers => avoids CORS preflight (OPTIONS)
+    // ✅ preflight avoid
     body: JSON.stringify({ action, idToken, ...payload }),
   })
 
-  const text = await response.text()
-  const data = (() => {
-    try { return JSON.parse(text) } catch { return null }
-  })()
+  const text = await res.text()
 
-  if (!response.ok || !data || data.ok === false) {
-    const message = data?.error || "Request failed"
-    const error = new Error(message)
-    error.code = data?.code || response.status
-    throw error
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch {
+    // 👇 yahi tumhe real reason dikha dega (HTML/redirect)
+    throw new Error(
+      `Non-JSON response from API. Status=${res.status}, URL=${res.url}\n` +
+      `Snippet: ${text.slice(0, 180)}`
+    )
   }
 
+  if (!data.ok) throw new Error(data.error || "Request failed")
   return data.data
 }
