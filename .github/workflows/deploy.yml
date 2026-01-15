@@ -17,11 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,17 +24,24 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Create .env.production (from GitHub Secret)
+        working-directory: frontend
+        run: |
+          echo "VITE_API_BASE=${{ secrets.VITE_API_BASE }}" > .env.production
+
       - name: Install deps
+        working-directory: frontend
         run: npm ci
 
       - name: Build
-        env:
-          # Apps Script Web App URL yahan secret se aayega
-          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
+        working-directory: frontend
         run: npm run build
 
       - name: Upload artifact
@@ -55,6 +57,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
