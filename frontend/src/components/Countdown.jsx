@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react'
 import { getCountdownParts } from '../utils/date'
 
 export default function Countdown({ iso }) {
-  const [parts, setParts] = useState(() => getCountdownParts(iso))
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    setParts(getCountdownParts(iso))
     const id = setInterval(() => {
-      setParts(getCountdownParts(iso))
+      setTick((value) => value + 1)
     }, 1000)
     return () => clearInterval(id)
-  }, [iso])
+  }, [])
 
+  const parts = getCountdownParts(iso, tick)
   if (!parts) return null
   if (parts.total <= 0) {
     return <span className="text-xs font-semibold text-red-600">OVERDUE</span>

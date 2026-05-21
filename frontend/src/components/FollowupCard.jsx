@@ -1,39 +1,23 @@
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { formatInTimeZone } from 'date-fns-tz'
-import { parseISO } from 'date-fns'
 import Countdown from './Countdown'
-import { formatFollowupLabel, isOverdue, TIMEZONE } from '../utils/date'
+import { formatFollowupLabel, isOverdue } from '../utils/date'
 
 export default function FollowupCard({
   followup,
-  remarks,
-  remarksLoading,
-  onLoadRemarks,
   onOpen,
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const [overdue, setOverdue] = useState(() =>
-    isOverdue(followup.followUpISO, followup.hasTime),
-  )
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    setOverdue(isOverdue(followup.followUpISO, followup.hasTime))
     const id = setInterval(() => {
-      setOverdue(isOverdue(followup.followUpISO, followup.hasTime))
+      setTick((value) => value + 1)
     }, 1000)
     return () => clearInterval(id)
-  }, [followup.followUpISO, followup.hasTime])
+  }, [])
 
   const label = formatFollowupLabel(followup.followUpISO, followup.hasTime)
-
-  const handleToggle = () => {
-    const next = !expanded
-    setExpanded(next)
-    if (next && !remarks && onLoadRemarks) {
-      onLoadRemarks(followup.dealerName)
-    }
-  }
+  const overdue = isOverdue(followup.followUpISO, followup.hasTime, tick)
 
   return (
     <div
@@ -50,9 +34,9 @@ export default function FollowupCard({
             {followup.dealerName}
           </h3>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            {followup.color && (
+            {followup.intervalDays && (
               <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-                {followup.color}
+                {followup.intervalDays} day interval
               </span>
             )}
             {overdue && (
@@ -89,47 +73,7 @@ export default function FollowupCard({
         <p className="text-sm font-medium text-slate-700">
           {followup.latestRemark || 'No remarks yet. Add the latest outcome.'}
         </p>
-        {followup.remarksCount > 0 && (
-          <button
-            type="button"
-            onClick={handleToggle}
-            className="mt-3 text-xs font-semibold text-brand-600"
-          >
-            {expanded ? 'Hide remarks' : 'See more'} ({followup.remarksCount})
-          </button>
-        )}
       </div>
-
-      {expanded && (
-        <div className="mt-4 space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-          {remarksLoading && <p className="text-xs text-slate-500">Loading remarks...</p>}
-          {!remarksLoading && remarks && remarks.length === 0 && (
-            <p className="text-xs text-slate-500">No remarks available.</p>
-          )}
-          {!remarksLoading &&
-            remarks &&
-            remarks.map((item, index) => {
-              const timestampLabel = item.timestampISO
-                ? formatInTimeZone(
-                    parseISO(item.timestampISO),
-                    TIMEZONE,
-                    'd MMM, h:mm a',
-                  )
-                : ''
-              return (
-                <div key={`${item.timestampISO}-${index}`}>
-                  <p className="text-xs font-semibold text-slate-500">
-                    {item.outcome} - {timestampLabel}
-                  </p>
-                  <p className="text-sm text-slate-700">{item.remark}</p>
-                  {item.location && (
-                    <p className="mt-1 text-xs text-slate-400">{item.location}</p>
-                  )}
-                </div>
-              )
-            })}
-        </div>
-      )}
     </div>
   )
 }

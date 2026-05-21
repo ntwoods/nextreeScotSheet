@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Modal from './Modal'
 import Spinner from './Spinner'
 import { toLocalInputValue } from '../utils/date'
@@ -17,15 +17,6 @@ export default function OutcomeModal({ open, followup, onClose, onSubmit, submit
   const [location, setLocation] = useState('')
   const [orderText, setOrderText] = useState('')
   const [sfDatetime, setSfDatetime] = useState('')
-
-  useEffect(() => {
-    if (!followup) return
-    setOutcome('NR')
-    setRemark('')
-    setLocation('')
-    setOrderText('')
-    setSfDatetime('')
-  }, [followup?.rowIndex])
 
   const showOrderFields = outcome === 'OR'
   const showSfFields = outcome === 'SF'

@@ -11,9 +11,6 @@ import Spinner from './components/Spinner'
 
 const AUTH_KEY = 'scotPortalAuth'
 
-const normalizeDealerKey = (dealerName) =>
-  String(dealerName || '').trim().toLowerCase()
-
 function Home() {
   const [auth, setAuth] = useState(() => {
     const raw = localStorage.getItem(AUTH_KEY)
@@ -21,8 +18,6 @@ function Home() {
   })
   const [followups, setFollowups] = useState([])
   const [orders, setOrders] = useState([])
-  const [remarksByDealer, setRemarksByDealer] = useState({})
-  const [remarksLoading, setRemarksLoading] = useState({})
   const [loadingFollowups, setLoadingFollowups] = useState(false)
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [activeFollowup, setActiveFollowup] = useState(null)
@@ -44,7 +39,6 @@ function Home() {
     setAuth(null)
     setFollowups([])
     setOrders([])
-    setRemarksByDealer({})
     localStorage.removeItem(AUTH_KEY)
   }
 
@@ -91,39 +85,12 @@ function Home() {
     }
   }, [auth?.idToken, refreshAll])
 
-  const handleLoadRemarks = async (dealerName) => {
-    const key = normalizeDealerKey(dealerName)
-    setRemarksLoading((prev) => ({ ...prev, [key]: true }))
-    try {
-      const data = await apiPost(
-        'getRemarks',
-        { dealerName },
-        auth.idToken,
-      )
-      setRemarksByDealer((prev) => ({ ...prev, [key]: data.remarks || [] }))
-    } catch (error) {
-      toast.error(error.message || 'Unable to load remarks')
-    } finally {
-      setRemarksLoading((prev) => ({ ...prev, [key]: false }))
-    }
-  }
-
   const handleOutcomeSubmit = async (payload) => {
     if (!auth?.idToken) return
     setSubmitting(true)
     try {
       const data = await apiPost('submitOutcome', payload, auth.idToken)
       const updatedFollowup = data.updatedFollowup
-      const dealerKey = normalizeDealerKey(activeFollowup.dealerName)
-      const logEntry = data.logEntry
-
-      setRemarksByDealer((prev) => {
-        const existing = prev[dealerKey] || []
-        return {
-          ...prev,
-          [dealerKey]: logEntry ? [logEntry, ...existing] : existing,
-        }
-      })
 
       setFollowups((prev) => {
         const next = []
@@ -238,19 +205,13 @@ function Home() {
                 </div>
               )}
               {!loadingFollowups &&
-                followups.map((followup) => {
-                  const dealerKey = normalizeDealerKey(followup.dealerName)
-                  return (
-                    <FollowupCard
-                      key={followup.rowIndex}
-                      followup={followup}
-                      remarks={remarksByDealer[dealerKey]}
-                      remarksLoading={remarksLoading[dealerKey]}
-                      onLoadRemarks={handleLoadRemarks}
-                      onOpen={setActiveFollowup}
-                    />
-                  )
-                })}
+                followups.map((followup) => (
+                  <FollowupCard
+                    key={followup.rowIndex}
+                    followup={followup}
+                    onOpen={setActiveFollowup}
+                  />
+                ))}
             </div>
           </section>
 
@@ -276,6 +237,7 @@ function Home() {
       </main>
 
       <OutcomeModal
+        key={activeFollowup?.rowIndex || 'closed'}
         open={Boolean(activeFollowup)}
         followup={activeFollowup}
         onClose={() => setActiveFollowup(null)}

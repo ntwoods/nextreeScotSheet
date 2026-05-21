@@ -136,14 +136,14 @@ function listFollowups(userEmail) {
     if (followUpKey > todayKey) return
 
     const dealerName = String(row.dealerName || '').trim()
-    const color = String(row.color || '').trim()
+    const intervalDays = parseIntervalDays(row.interval)
     const dealerKey = normalizeDealerKey(dealerName)
     const remarks = remarksByDealer[dealerKey] || []
 
     followups.push({
       rowIndex,
       dealerName,
-      color,
+      intervalDays,
       followUpISO: formatDateIso(followUpDate),
       hasTime: dateHasTime(followUpDate),
       overdue: isOverdue(followUpDate),
@@ -212,7 +212,7 @@ function submitOutcome(payload, userEmail) {
     }
 
     const dealerName = String(rowValues[1] || '').trim()
-    const color = String(rowValues[2] || '').trim()
+    const intervalDays = parseIntervalDays(rowValues[2])
     const oldFollowUp = coerceDate(rowValues[3])
     const oldFollowUpISO = oldFollowUp ? formatDateIso(oldFollowUp) : ''
 
@@ -231,7 +231,7 @@ function submitOutcome(payload, userEmail) {
         }
       }
 
-      newFollowUp = buildNextFollowup(oldFollowUp)
+      newFollowUp = buildNextFollowup(oldFollowUp, intervalDays)
       sheet.getRange(rowIndex, 4).setValue(newFollowUp)
     } else if (outcome === 'MD') {
       sheet.getRange(rowIndex, 4).setValue('')
@@ -269,7 +269,7 @@ function submitOutcome(payload, userEmail) {
       location,
       orderText,
       rowIndex,
-      color,
+      intervalDays,
     ])
 
     const cardShouldStayToday = newFollowUp
@@ -354,8 +354,13 @@ function ensureLogsSheet() {
       'Location',
       'OrderText',
       'RowIndex',
-      'Dealer Color',
+      'Interval',
     ])
+  } else {
+    const intervalHeader = String(sheet.getRange(1, 11).getValue() || '').trim()
+    if (intervalHeader === 'Dealer Color') {
+      sheet.getRange(1, 11).setValue('Interval')
+    }
   }
 
   return sheet
@@ -370,7 +375,7 @@ function getScotValues(sheet) {
     rowIndex: index + 2,
     email: row[0],
     dealerName: row[1],
-    color: row[2],
+    interval: row[2],
     followUp: row[3],
   }))
 }
@@ -402,7 +407,7 @@ function buildRemarksMap(logsSheet, userEmail) {
   return map
 }
 
-function buildNextFollowup(oldFollowUp) {
+function buildNextFollowup(oldFollowUp, intervalDays) {
   const now = new Date()
   const nowParts = getTzParts(now)
   let hours = 0
@@ -419,11 +424,21 @@ function buildNextFollowup(oldFollowUp) {
   return makeDateInTimeZone(
     nowParts.year,
     nowParts.month,
-    nowParts.day + 15,
+    nowParts.day + intervalDays,
     hours,
     minutes,
     seconds,
   )
+}
+
+function parseIntervalDays(value) {
+  const intervalDays = Number(value)
+  if (intervalDays !== 4 && intervalDays !== 7) {
+    const error = new Error('Invalid interval. SCOT column C must be 4 or 7.')
+    error.code = 400
+    throw error
+  }
+  return intervalDays
 }
 
 function buildFollowupMeta(date, now) {
