@@ -216,6 +216,7 @@ function submitOutcome(payload, userEmail) {
     const oldFollowUp = coerceDate(rowValues[3])
     const oldFollowUpISO = oldFollowUp ? formatDateIso(oldFollowUp) : ''
 
+    const now = new Date()
     let newFollowUp = null
     let location = ''
     let orderText = ''
@@ -231,7 +232,12 @@ function submitOutcome(payload, userEmail) {
         }
       }
 
-      newFollowUp = buildNextFollowup(oldFollowUp, intervalDays)
+      newFollowUp = buildNextFollowup(oldFollowUp, intervalDays, now)
+      if (!newFollowUp) {
+        const error = new Error('Unable to calculate the next follow-up date')
+        error.code = 500
+        throw error
+      }
       sheet.getRange(rowIndex, 4).setValue(newFollowUp)
     } else if (outcome === 'MD') {
       sheet.getRange(rowIndex, 4).setValue('')
@@ -256,7 +262,6 @@ function submitOutcome(payload, userEmail) {
     }
 
     const newFollowUpISO = newFollowUp ? formatDateIso(newFollowUp) : ''
-    const now = new Date()
 
     logsSheet.appendRow([
       now,
@@ -407,9 +412,10 @@ function buildRemarksMap(logsSheet, userEmail) {
   return map
 }
 
-function buildNextFollowup(oldFollowUp, intervalDays) {
-  const now = new Date()
-  const nowParts = getTzParts(now)
+function buildNextFollowup(oldFollowUp, intervalDays, referenceDate) {
+  const interval = parseIntervalDays(intervalDays)
+  const now = coerceDate(referenceDate) || new Date()
+  const nextDateParts = addCalendarDays(getTzParts(now), interval)
   let hours = 0
   let minutes = 0
   let seconds = 0
@@ -422,13 +428,27 @@ function buildNextFollowup(oldFollowUp, intervalDays) {
   }
 
   return makeDateInTimeZone(
-    nowParts.year,
-    nowParts.month,
-    nowParts.day + intervalDays,
+    nextDateParts.year,
+    nextDateParts.month,
+    nextDateParts.day,
     hours,
     minutes,
     seconds,
   )
+}
+
+function addCalendarDays(parts, days) {
+  // UTC is used only as a calendar calculator. Building an ISO string with an
+  // overflow day (for example 2026-06-33) produces an Invalid Date instead of
+  // rolling into the next month.
+  const calendarDate = new Date(
+    Date.UTC(parts.year, parts.month, parts.day + days, 12, 0, 0),
+  )
+  return {
+    year: calendarDate.getUTCFullYear(),
+    month: calendarDate.getUTCMonth(),
+    day: calendarDate.getUTCDate(),
+  }
 }
 
 function parseIntervalDays(value) {
@@ -466,13 +486,13 @@ function normalizeDealerKey(value) {
 }
 
 function dateHasTime(date) {
-  if (!date || !(date instanceof Date)) return false
+  if (!isValidDate(date)) return false
   const parts = getTzParts(date)
   return parts.hours !== 0 || parts.minutes !== 0 || parts.seconds !== 0
 }
 
 function formatDateIso(date) {
-  if (!date || !(date instanceof Date)) return ''
+  if (!isValidDate(date)) return ''
   return Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX")
 }
 
@@ -492,6 +512,30 @@ function getTzParts(date) {
 }
 
 function makeDateInTimeZone(year, month, day, hours, minutes, seconds) {
+  const calendarCheck = new Date(Date.UTC(year, month, day))
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    !Number.isInteger(seconds) ||
+    month < 0 ||
+    month > 11 ||
+    day < 1 ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59 ||
+    calendarCheck.getUTCFullYear() !== year ||
+    calendarCheck.getUTCMonth() !== month ||
+    calendarCheck.getUTCDate() !== day
+  ) {
+    return null
+  }
+
   const iso = Utilities.formatString(
     '%04d-%02d-%02dT%02d:%02d:%02d+05:30',
     year,
@@ -501,46 +545,58 @@ function makeDateInTimeZone(year, month, day, hours, minutes, seconds) {
     minutes,
     seconds,
   )
-  return new Date(iso)
+  const date = new Date(iso)
+  return isValidDate(date) ? date : null
 }
 
 function coerceDate(value) {
   if (value === null || value === undefined || value === '') return null
-  if (value instanceof Date) return value
+  if (value instanceof Date) return isValidDate(value) ? value : null
 
   if (typeof value === 'number' && !Number.isNaN(value)) {
+    if (value <= 0) return null
     const millis = Math.round((value - 25569) * 86400 * 1000)
-    if (!Number.isNaN(millis)) return new Date(millis)
+    const serialDate = new Date(millis)
+    return isValidDate(serialDate) ? serialDate : null
   }
 
   const raw = String(value).trim()
   if (!raw) return null
 
-  const parsed = new Date(raw)
-  if (!Number.isNaN(parsed.getTime())) return parsed
-
-  const match = raw.match(
+  const localDateMatch = raw.match(
     /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
   )
-  if (!match) return null
-
-  const day = Number(match[1])
-  const month = Number(match[2]) - 1
-  const year = Number(match[3])
-  const hours = match[4] ? Number(match[4]) : 0
-  const minutes = match[5] ? Number(match[5]) : 0
-  const seconds = match[6] ? Number(match[6]) : 0
-
-  if (
-    Number.isNaN(day) ||
-    Number.isNaN(month) ||
-    Number.isNaN(year) ||
-    Number.isNaN(hours) ||
-    Number.isNaN(minutes) ||
-    Number.isNaN(seconds)
-  ) {
-    return null
+  if (localDateMatch) {
+    return makeDateInTimeZone(
+      Number(localDateMatch[3]),
+      Number(localDateMatch[2]) - 1,
+      Number(localDateMatch[1]),
+      localDateMatch[4] ? Number(localDateMatch[4]) : 0,
+      localDateMatch[5] ? Number(localDateMatch[5]) : 0,
+      localDateMatch[6] ? Number(localDateMatch[6]) : 0,
+    )
   }
 
-  return makeDateInTimeZone(year, month, day, hours, minutes, seconds)
+  const isoDateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoDateMatch) {
+    return makeDateInTimeZone(
+      Number(isoDateMatch[1]),
+      Number(isoDateMatch[2]) - 1,
+      Number(isoDateMatch[3]),
+      0,
+      0,
+      0,
+    )
+  }
+
+  // ISO timestamps sent by the portal contain an explicit UTC offset or Z and
+  // are therefore safe for the JavaScript parser. Locale-dependent strings are
+  // deliberately rejected.
+  if (!/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)) return null
+  const parsed = new Date(raw)
+  return isValidDate(parsed) ? parsed : null
+}
+
+function isValidDate(value) {
+  return value instanceof Date && !Number.isNaN(value.getTime())
 }
